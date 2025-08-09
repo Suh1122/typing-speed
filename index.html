@@ -1,0 +1,332 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Typing Speed Race</title>
+  <!-- Chart.js for history chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg: #ffffff;
+      --card: #f4f4f6;
+      --text: #0b0b0b;
+      --muted: #4b5563;
+      --accent: #0b84ff;
+      --error: #ff3b30;
+      --success: #10b981;
+      --glass: rgba(255,255,255,0.6);
+    }
+    [data-theme="dark"]{
+      --bg: #0b1020;
+      --card: #0f1724;
+      --text: #e6eef8;
+      --muted: #9aa8bf;
+      --accent: #58a6ff;
+      --error: #ff6b6b;
+      --success: #2dd4bf;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); color:var(--text)}
+    .wrap{max-width:1100px;margin:28px auto;padding:20px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    h1{margin:0;font-size:20px;letter-spacing:-0.2px}
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{background:var(--accent);color:white;border:none;padding:8px 12px;border-radius:10px;font-weight:600;cursor:pointer}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(0,0,0,0.06)}
+    .panel{background:var(--card);padding:18px;border-radius:14px;box-shadow:0 6px 18px rgba(11,12,14,0.06);}
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:18px}
+
+    /* Typing area */
+    .typing-area{display:flex;flex-direction:column;gap:12px}
+    .target{font-size:18px;line-height:1.6;padding:14px;border-radius:10px;background:var(--glass);min-height:120px;overflow:auto}
+    .target .char{padding:0 1px}
+    .target .correct{background:transparent;color:var(--success)}
+    .target .wrong{background:transparent;color:var(--error);text-decoration:underline}
+
+    .type-box{display:flex;flex-direction:column;gap:8px}
+    textarea#input{width:100%;min-height:160px;font-size:18px;padding:12px;border-radius:10px;border:2px dashed rgba(0,0,0,0.06);resize:vertical;background:transparent;color:var(--text);outline:none}
+    .metrics{display:flex;gap:14px;align-items:center;font-weight:700}
+    .metric{background:var(--bg);padding:10px;border-radius:10px;min-width:96px;text-align:center;border:1px solid rgba(0,0,0,0.04)}
+    .timer{font-size:36px}
+
+    /* Countdown overlay */
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:60;pointer-events:none}
+    .count{width:240px;height:240px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:72px;background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));backdrop-filter:blur(4px);color:var(--text);box-shadow:0 12px 40px rgba(2,6,23,0.5)}
+    .hidden{display:none}
+
+    /* right column */
+    .side{display:flex;flex-direction:column;gap:12px}
+    .side .panel{padding:14px}
+    label{display:flex;flex-direction:column;font-size:13px;color:var(--muted)}
+    input[type=number]{width:100px;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);margin-top:6px}
+
+    .history-list{max-height:160px;overflow:auto;margin-top:8px}
+    .history-item{display:flex;justify-content:space-between;padding:8px;border-radius:8px}
+    footer{margin-top:18px;font-size:13px;color:var(--muted)}
+
+    /* responsive */
+    @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body data-theme="light">
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Typing Speed Race</h1>
+        <div style="font-size:13px;color:var(--muted)">Test your WPM & accuracy fast, clear and focused.</div>
+      </div>
+      <div class="controls">
+        <button id="themeToggle" class="btn ghost">Dark</button>
+        <button id="newPara" class="btn">New paragraph</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel typing-area">
+        <div class="target" id="target" aria-live="polite"></div>
+
+        <div class="type-box">
+          <textarea id="input" placeholder="Start typing here..." aria-label="Typing input"></textarea>
+
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="metrics">
+              <div class="metric"><div style="font-size:12px;color:var(--muted)">WPM</div><div id="wpm" style="font-size:20px">0</div></div>
+              <div class="metric"><div style="font-size:12px;color:var(--muted)">Accuracy</div><div id="acc" style="font-size:20px">0%</div></div>
+              <div class="metric"><div style="font-size:12px;color:var(--muted)">Errors</div><div id="errs" style="font-size:20px">0</div></div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <div style="text-align:right"><div style="font-size:12px;color:var(--muted)">Time left</div><div id="time" class="timer">60</div></div>
+              <button id="startBtn" class="btn">Start</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="panel">
+          <label>Duration (seconds)
+            <input id="duration" type="number" value="60" min="5" max="600">
+          </label>
+          <label style="margin-top:8px">Difficulty (words)
+            <input id="length" type="number" value="60" min="15" max="400">
+          </label>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button id="resetBtn" class="btn ghost">Reset</button>
+            <button id="saveBtn" class="btn">Save result</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div style="font-weight:800">History</div>
+          <div class="history-list" id="historyList"></div>
+          <canvas id="historyChart" style="height:180px;width:100%"></canvas>
+        </div>
+
+        <div class="panel">
+          <div style="font-weight:800">Tips</div>
+          <ul style="margin:8px 0 0 18px;color:var(--muted)">
+            <li>Focus on accuracy first, then speed.</li>
+            <li>Use the generated paragraph to practice different words.</li>
+            <li>Reset or press New paragraph to change tests.</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <footer>Made with ❤️</footer>
+  </div>
+
+  <!-- Countdown overlay -->
+  <div class="overlay hidden" id="overlay">
+    <div class="count" id="count">3</div>
+  </div>
+
+  <script>
+    // --- data and DOM
+    const paragraphs = [
+      "The smell of roasted coffee drifted through the narrow alley, mingling with the faint aroma of freshly baked croissants from a tiny corner bakery. Outside, the streets glistened from a morning drizzle, and the sound of footsteps echoed against the old stone walls. A street musician sat on a wooden stool, strumming a gentle tune on his guitar, while a young couple paused to listen, their hands wrapped around steaming paper cups. A newspaper vendor called out the day’s headlines, and the city slowly stretched awake, ready to greet another day.",
+      "The waves rolled lazily toward the shore, their foamy crests dissolving into the warm golden sand. Children chased each other along the waterline, their laughter blending with the cry of seagulls above. A kite danced high in the clear sky, swaying and dipping in the breeze, its bright colors vivid against the endless blue. Further down the beach, a man sat under a wide straw umbrella, sketching the scene before him in a worn notebook, his pencil moving in quick, confident strokes as if trying to capture the fleeting beauty of the moment before it slipped away.",
+      "The library was a sanctuary of quiet, the kind of silence that carried its own weight. Dust motes floated lazily in the shafts of sunlight pouring through the tall arched windows, and the scent of aged paper hung in the air. A young woman sat tucked away at a corner table, her eyes scanning lines of text as though each word might hold a secret worth guarding. Outside, autumn leaves skittered across the pavement, but here, time seemed to slow, measured only by the soft rustle of pages turning and the occasional creak of wooden floors beneath wandering footsteps.",
+      "The bustling market was alive with color and sound, each stall overflowing with vibrant fruits, fragrant spices, and handwoven fabrics. Merchants called out cheerful greetings, their voices rising above the hum of bargaining and chatter. Somewhere nearby, the sizzling of street food filled the air with an irresistible aroma of grilled meat and fresh herbs. Children weaved between the crowd, clutching sweet treats wrapped in paper, while tourists paused to admire intricate jewelry glinting in the midday sun. Every corner seemed to hold a new story, and the day promised to end with bags full and hearts full too.",
+      "The rain tapped gently against the café’s wide windows, forming tiny rivers that raced toward the sill. Inside, the warm glow of amber lights wrapped around wooden tables, each one holding the soft hum of conversation. A barista moved gracefully behind the counter, pouring milk into a cup in swirling patterns that looked almost too beautiful to drink. In the corner, an elderly man read a tattered novel, pausing now and then to sip his tea, as if the world outside could wait just a little longer.",
+      "The hiking trail wound upward through a canopy of tall pines, their needles whispering in the cool mountain breeze. Patches of sunlight broke through the leaves, painting golden patterns on the forest floor. Somewhere in the distance, a stream gurgled over smooth rocks, and the scent of damp earth filled the air. A squirrel darted across the path, pausing for a moment as if to study the travelers before disappearing into the undergrowth. Each step forward felt like a quiet invitation to keep exploring.",
+      "The harbor buzzed with life as fishing boats returned from the open sea, their nets heavy with the morning’s catch. Seagulls swooped and cried overhead, diving toward the glistening silver fish laid out in wooden crates. The salty scent of the ocean mingled with the sharp tang of fresh lemons sold by a vendor at the pier. Children skipped along the dock, pointing at the colorful boats bobbing in the water, while fishermen traded stories that sounded half-true and half-legend."
+    ];
+
+    const targetEl = document.getElementById('target');
+    const inputEl = document.getElementById('input');
+    const wpmEl = document.getElementById('wpm');
+    const accEl = document.getElementById('acc');
+    const errsEl = document.getElementById('errs');
+    const timeEl = document.getElementById('time');
+    const startBtn = document.getElementById('startBtn');
+    const newParaBtn = document.getElementById('newPara');
+    const resetBtn = document.getElementById('resetBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const durationInput = document.getElementById('duration');
+    const lengthInput = document.getElementById('length');
+    const overlay = document.getElementById('overlay');
+    const count = document.getElementById('count');
+    const historyList = document.getElementById('historyList');
+
+    let timer = null; let started=false; let startTime=0; let totalDuration=60; let elapsed=0;
+    let currentText = '';
+
+    // history
+    function loadHistory(){
+      const raw = localStorage.getItem('tsr_history')||'[]';
+      try{return JSON.parse(raw)}catch(e){return []}
+    }
+    function saveHistoryItem(item){
+      const h = loadHistory(); h.unshift(item); if(h.length>50) h.pop(); localStorage.setItem('tsr_history', JSON.stringify(h)); renderHistory();}
+    function renderHistory(){
+      const list = loadHistory(); historyList.innerHTML='';
+      list.slice(0,12).forEach(it=>{
+        const d = new Date(it.t);
+        const el = document.createElement('div'); el.className='history-item';
+        el.innerHTML = `<div><div style="font-weight:700">${Math.round(it.w)} WPM</div><div style="font-size:12px;color:var(--muted)">${d.toLocaleString()}</div></div><div style="text-align:right"><div style="font-weight:700">${Math.round(it.a)}%</div><div style="font-size:12px;color:var(--muted)">${it.errors} errs</div></div>`;
+        historyList.appendChild(el);
+      });
+      updateChart();
+    }
+
+    // chart
+    let chart=null;
+    function updateChart(){
+      const data = loadHistory().slice(0,20).reverse();
+      const labels = data.map(d=>new Date(d.t).toLocaleDateString());
+      const wpm = data.map(d=>d.w);
+      if(!chart){
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        chart = new Chart(ctx,{
+          type:'line', data:{labels, datasets:[{label:'WPM', data:wpm, tension:0.3, fill:false}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+        });
+      } else {
+        chart.data.labels = labels; chart.data.datasets[0].data = wpm; chart.update();
+      }
+    }
+
+    // build and render target
+    function genParagraph(wordCount){
+      // random selection from sentences to reach approx wordCount
+      const out = [];
+      while(out.join(' ').split(/\s+/).filter(Boolean).length < wordCount){
+        out.push(paragraphs[Math.floor(Math.random()*paragraphs.length)]);
+      }
+      return out.join(' ').split(/\s+/).slice(0,wordCount).join(' ') + '.';
+    }
+    function renderTarget(text){
+      currentText = text;
+      targetEl.innerHTML = '';
+      text.split('').forEach(ch=>{
+        const span = document.createElement('span'); span.className='char'; span.textContent = ch; targetEl.appendChild(span);
+      });
+    }
+
+    // scoring & highlighting
+    function computeStats(){
+      const typed = inputEl.value;
+      const chars = currentText.split('');
+      let correct = 0; let errors=0; let extra=0;
+      for(let i=0;i<chars.length;i++){
+        const span = targetEl.children[i];
+        const t = typed[i];
+        span.className = 'char';
+        if(t==null){ /* not typed yet */ }
+        else if(t === chars[i]){ span.classList.add('correct'); correct++; }
+        else { span.classList.add('wrong'); errors++; }
+      }
+      // typed extra characters beyond target
+      if(typed.length > chars.length) extra = typed.length - chars.length;
+      const totalTyped = typed.length;
+      const accuracy = totalTyped === 0 ? 0 : Math.max(0, (correct / totalTyped) * 100);
+      const minutes = Math.max( ( (Date.now() - startTime) / 60000 ), 1/60);
+      const wpm = Math.max(0, (correct / 5) / minutes);
+      wpmEl.textContent = Math.round(wpm);
+      accEl.textContent = Math.round(accuracy) + '%';
+      errsEl.textContent = errors + extra;
+      return {wpm, accuracy, errors: errors + extra, correct};
+    }
+
+    // countdown animation before actual start
+    function doCountdown(seconds=3){
+      overlay.classList.remove('hidden');
+      overlay.style.pointerEvents='all';
+      return new Promise(res=>{
+        let c = seconds;
+        count.textContent = c;
+        const iv = setInterval(()=>{
+          c--; if(c>0){ count.textContent = c; count.animate([{transform:'scale(0.92)'},{transform:'scale(1)'}],{duration:250}) }
+          else { clearInterval(iv); count.textContent='GO'; count.animate([{transform:'scale(1)'},{transform:'scale(1.2)'},{transform:'scale(1)'}],{duration:500}); setTimeout(()=>{ overlay.classList.add('hidden'); overlay.style.pointerEvents='none'; res(); },400);} },1000);
+      });
+    }
+
+    // timer
+    function startTimer(duration){
+      totalDuration = duration; startTime = Date.now(); elapsed = 0; timeEl.textContent = duration;
+      timer = setInterval(()=>{
+        elapsed = Math.floor((Date.now() - startTime)/1000);
+        const left = Math.max(0, duration - elapsed);
+        timeEl.textContent = left;
+        computeStats();
+        if(left<=0){ stopTimer(); }
+      },250);
+    }
+    function stopTimer(){
+      if(timer) clearInterval(timer); timer=null; started=false; startBtn.textContent='Start'; inputEl.disabled=true; inputEl.blur();
+    }
+
+    // actions
+    async function startRun(){
+      if(started) return; // already started
+      // prepare
+      inputEl.value=''; inputEl.disabled=true; inputEl.focus();
+      const dur = parseInt(durationInput.value,10)||60;
+      // countdown
+      await doCountdown(3);
+      inputEl.disabled=false; inputEl.focus();
+      started=true; startBtn.textContent='Running...';
+      startTime = Date.now();
+      startTimer(dur);
+    }
+    function endRun(){
+      const stats = computeStats();
+      stopTimer();
+      return stats;
+    }
+
+    // new paragraph
+    function newParagraph(){ renderTarget(genParagraph(parseInt(lengthInput.value,10)||60)); }
+
+    // events
+    newParaBtn.addEventListener('click', newParagraph);
+    startBtn.addEventListener('click', ()=>{ if(!started) startRun(); else { /* allow stop manually */ const s = endRun(); savePreview(s); } });
+    resetBtn.addEventListener('click', ()=>{ stopTimer(); inputEl.value=''; renderTarget(currentText); wpmEl.textContent='0'; accEl.textContent='0%'; errsEl.textContent='0'; timeEl.textContent = durationInput.value || 60; inputEl.disabled=false; });
+    inputEl.addEventListener('input', ()=>{ if(!startTime) startTime = Date.now(); computeStats(); });
+
+    // save result
+    function savePreview(result){
+      const it = {w: result.wpm, a: result.accuracy, errors: result.errors, t: Date.now()};
+      saveHistoryItem(it); alert('Result saved to local history.');
+    }
+    saveBtn.addEventListener('click', ()=>{ const s = computeStats(); savePreview(s); });
+
+    // theme toggle
+    const themeBtn = document.getElementById('themeToggle');
+    function setTheme(t){ document.body.setAttribute('data-theme', t); themeBtn.textContent = t === 'dark' ? 'Light' : 'Dark'; }
+    themeBtn.addEventListener('click', ()=>{ const cur = document.body.getAttribute('data-theme'); setTheme(cur==='dark' ? 'light' : 'dark'); localStorage.setItem('tsr_theme', document.body.getAttribute('data-theme')); });
+    // load saved theme
+    const savedTheme = localStorage.getItem('tsr_theme')||'light'; setTheme(savedTheme);
+
+    // initialisation
+    (function init(){
+      newParagraph(); renderHistory();
+      // keyboard shortcut: Ctrl+Enter to start/stop
+      window.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ startBtn.click(); } });
+    })();
+  </script>
+</body>
+</html>
